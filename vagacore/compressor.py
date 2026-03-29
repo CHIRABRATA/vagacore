@@ -1,7 +1,7 @@
 # Compressor module for VagaCore
-from parser import parse_text
-from extractor import extract_svo, extract_details
-from utils import remove_noise
+from .parser import parse_text
+from .extractor import extract_svo, extract_details
+from .utils import remove_noise
 
 
 def compress(text):

@@ -28,3 +28,22 @@ def remove_noise(doc):
         clean_tokens.append(token.text)
 
     return " ".join(clean_tokens)
+
+
+def clean_text(text):
+    """Lightweight preprocessing to remove noisy characters before parsing.
+
+    - Keeps alphanumerics, whitespace, basic punctuation, currency and percent symbols
+    - Collapses consecutive whitespace
+    - Preserves casing so spaCy can leverage capitalization for entities
+    """
+    import re
+
+    if not text:
+        return ""
+
+    # Remove obvious noise (emoji, symbols) but keep $, %, ., commas and hyphens
+    cleaned = re.sub(r"[^A-Za-z0-9$%.,:/\-\s]+", " ", text)
+    # Collapse multiple spaces
+    cleaned = re.sub(r"\s+", " ", cleaned).strip()
+    return cleaned

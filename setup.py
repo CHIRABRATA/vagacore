@@ -5,12 +5,12 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="vagacore",
-    version="0.6.0",
-    author="VagaCore Team",
+    version="1.0.1",
+    author="THE CHIRABRATA",
     description="Intelligent Text Compression & Fact Extraction Engine using NLP",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/yourusername/vagacore",
+    url="https://github.com/CHIRABRATA/vagacore",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

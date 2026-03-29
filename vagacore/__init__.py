@@ -12,7 +12,7 @@ Features:
 - Structured JSON output
 """
 
-__version__ = "0.6.0"
+__version__ = "1.0.1"
 __author__ = "VagaCore Team"
 
 from .compressor import compress

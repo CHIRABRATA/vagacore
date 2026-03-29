@@ -1,7 +1,7 @@
 def extract_svo(doc):
     """
     Extract Subject, Verb, Object from parsed text.
-    IMPROVED: Reliable grammatical extraction with validation.
+    GUARDED: Reliable grammatical extraction with validation and negation/hypothetical skipping.
     
     Uses dependency parsing:
     - nsubj = nominal subject (who/what is doing)
@@ -13,12 +13,31 @@ def extract_svo(doc):
     subject = None
     verb = None
     obj = None
+
+    # Guard against negated or hypothetical statements to avoid hallucinated facts.
+    is_negated = any(token.dep_ == "neg" for token in doc)
+    is_hypothetical = any(
+        token.text.lower() == "if" or (token.pos_ == "AUX" and token.lemma_ in ["will", "would", "could", "might"])
+        for token in doc
+    )
+
+    if is_negated or is_hypothetical:
+        return None, None, None
     
     # Step 1: Extract subject (grammatical nsubj)
     for token in doc:
         if token.dep_ == "nsubj" and subject is None:
-            # Use the actual subject/actor
-            subject = _validate_entity(token.text)
+            owners = [child.text for child in token.children if child.dep_ == "poss"]
+            compounds = [child.text for child in token.children if child.dep_ == "compound"]
+
+            # Prefer possessive owner (e.g., Nvidia's revenue → Nvidia), then compound root (Netflix revenue → Netflix)
+            if owners:
+                owner_clean = owners[0].replace("'s", "").strip()
+                subject = _validate_entity(owner_clean) or _validate_entity(owners[0])
+            if not subject and compounds:
+                subject = _validate_entity(compounds[0])
+            if not subject:
+                subject = _validate_entity(token.text)
             if subject:
                 break
     
@@ -39,7 +58,7 @@ def extract_svo(doc):
     
     # Step 3: Extract object with quantity handling
     for token in doc:
-        if token.dep_ in ["dobj", "attr"] and obj is None:
+        if token.dep_ in ["dobj", "attr", "pobj"] and obj is None:
             if _is_quantity(token.text):
                 # Build full quantity phrase
                 obj = _build_quantity_phrase(token, doc)
@@ -50,46 +69,36 @@ def extract_svo(doc):
 
 
 def _validate_entity(text):
-    """
-    Validate if token is a real entity (not generic word, number, etc).
-    Returns cleaned text if valid, None otherwise.
-    """
-    if not text or len(text) < 2:
+    """Validate if token is a real entity (not generic word, number, etc)."""
+    if not text:
         return None
-    
-    # Reject numbers and pure quantities
+
+    # Strip leading single-letter unit prefixes and trailing punctuation (handles "$500M." and "M Profit")
+    import re
+    text = re.sub(r'^[MB]\s+', '', text)
+    text = text.strip().rstrip('.,;:')
+
+    # REJECTION LIST: expanded financial/common non-entity terms
     reject_patterns = [
-        "million", "billion", "trillion", "thousand", "hundred",
-        "percent", "%", "percentage",
-        "period", "quarter", "year", "time", "date", "day",
-        "q1", "q2", "q3", "q4",  # Quarters are times, not entities
-        "same", "this", "that", "the", "a", "an",
-        "it", "they", "them", "us", "we", "i", "you",
-        "amount", "value", "number", "growth", "increase", "decrease",
-        "result", "outcome", "change", "rise", "fall", "surge", "decline",
-        # Generic nouns that aren't specific entities
-        "company", "firm", "business", "corporation", "organization",
-        "industry", "sector", "market", "group", "entity", "player",
-        "one", "two", "three", "report", "statement",
+        "million", "billion", "trillion", "thousand", "hundred", "percent", "%",
+        "period", "quarter", "year", "time", "date", "day", "q1", "q2", "q3", "q4",
+        "same", "this", "that", "the", "a", "an", "it", "they", "them", "us", "we",
+        "amount", "value", "number", "growth", "increase", "decrease", "result",
+        "revenue", "profit", "earnings", "sales", "income", "loss", "margin", "eps",
+        "company", "firm", "business", "corporation", "one", "two", "lol", "idk"
     ]
-    
-    lower_text = text.lower()
-    
-    # Check if it's a rejected pattern
-    for pattern in reject_patterns:
-        if lower_text == pattern:
-            return None
-    
-    # Reject pure numbers
+
+    lower_text = text.lower().strip()
+    if lower_text in reject_patterns:
+        return None
+
+    # Reject pure numbers or currency symbols
     if text.replace(".", "").replace(",", "").isdigit():
         return None
-    
-    # Reject currency symbols only
     if all(c in "$€£¥" for c in text):
         return None
-    
-    # Valid entity
-    return text.strip()
+
+    return text if len(text) > 1 else None
 
 
 def _normalize_verb(verb_lemma):
@@ -99,7 +108,7 @@ def _normalize_verb(verb_lemma):
     """
     # Mapping of verbs to standard forms
     verb_map = {
-        # Reporting
+        # Reporting / financial result verbs (normalized to a single class)
         "report": "reported",
         "announce": "reported",
         "declare": "reported",
@@ -108,17 +117,13 @@ def _normalize_verb(verb_lemma):
         "release": "reported",
         "state": "reported",
         "say": "reported",
-        
-        # Having/Possessing (treat as reporting)
         "have": "reported",
         "had": "reported",
-        
-        # Earnings/Money
-        "earn": "earned",
-        "make": "earned",
-        "generate": "earned",
-        "gain": "earned",
-        "achieve": "achieved",
+        "earn": "reported",
+        "make": "reported",
+        "generate": "reported",
+        "gain": "reported",
+        "post": "reported",
         
         # Growth
         "grow": "increased",
@@ -140,6 +145,7 @@ def _normalize_verb(verb_lemma):
         "hit": "reached",
         "exceed": "exceeded",
         "meet": "met",
+        "achieve": "achieved",
     }
     
     lower_verb = verb_lemma.lower() if verb_lemma else None
@@ -299,7 +305,7 @@ def extract_entities_by_type(doc):
 def extract_details(doc):
     """
     Extract value, time, and entity from parsed text.
-    IMPROVED: Robust extraction with validation and normalization.
+    IMPROVED: Robust extraction with validation and normalization. Skips negated/hypothetical statements.
     
     Strategy:
     1. Extract using NER (high confidence)
@@ -313,86 +319,53 @@ def extract_details(doc):
         entity: Validated entity name ("Apple", not "million")
         confidence: Score 0-1 for reliability
     """
-    value = None
-    time = None
-    entity = None
+    # Guard against negated or hypothetical statements; they are treated as non-facts.
+    is_negated = any(token.dep_ == "neg" for token in doc)
+    is_hypothetical = any(
+        token.text.lower() == "if" or (token.pos_ == "AUX" and token.lemma_ in ["will", "would", "could", "might"])
+        for token in doc
+    )
+
+    if is_negated or is_hypothetical:
+        return None, None, None, 0.0
+
+    value, time, entity = None, None, None
     confidence = 0.5
+    all_values = []
     
-    org_entity = None
-    money_entity = None
-    percent_entity = None
-    
-    # Step 1: Extract using NER with validation
+    # Step 1: NER Pass
     for ent in doc.ents:
-        # Extract monetary values - VALIDATE
-        if ent.label_ == "MONEY":
-            money_entity = ent.text.strip()
+        if ent.label_ in ["MONEY", "PERCENT"]:
+            all_values.append(ent.text.strip())
             if value is None:
-                value = money_entity
+                value = ent.text.strip()
                 confidence = 0.9
-
-        # Extract percentage - VALIDATE
-        elif ent.label_ == "PERCENT":
-            percent_entity = ent.text.strip()
-            if value is None:
-                value = percent_entity
-                confidence = 0.9
-
-        # Extract temporal information - NORMALIZE
         elif ent.label_ == "DATE":
-            normalized_time = _normalize_time(ent.text.strip())
-            if normalized_time:
-                time = normalized_time
-                confidence = min(1.0, confidence + 0.2)
+            time = _normalize_time(ent.text.strip())
+        elif ent.label_ in ["ORG", "PRODUCT", "PERSON"] and entity is None:
+            entity = _validate_entity(ent.text.strip())
 
-        # Extract organizations/entities - VALIDATE
-        elif ent.label_ in ["ORG", "PRODUCT", "PERSON"]:
-            validated_entity = _validate_entity(ent.text.strip())
-            if validated_entity:
-                if ent.label_ in ["ORG", "PRODUCT"]:
-                    org_entity = validated_entity
-                elif ent.label_ == "PERSON":
-                    entity = validated_entity
-                    confidence = 0.95
-    
-    # Step 2: Use domain keywords for entity - higher confidence than generic ORG
-    domain_keywords = [
-        "revenue", "profit", "earnings", "sales", "income", 
-        "loss", "growth", "increase", "decline", "margin",
-        "earnings per share", "eps"
-    ]
-    
-    # IMPORTANT: Check ORG entity FIRST - it's usually the subject actor
-    if entity is None and org_entity is not None:
-        entity = org_entity
-        confidence = 0.9  # ORG from NER is usually the subject
-    
-    # Step 3: Use domain keywords only as fallback
-    for token in doc:
-        if entity is None and token.dep_ == "pobj" and token.head.text in ["in", "of"]:
-            lower_text = token.text.lower()
-            
-            # Domain keywords are high-confidence entities only if no ORG found
-            if lower_text in domain_keywords:
-                entity = token.text.strip()
-                confidence = 0.85
-                break
-    
-    # Step 4: Extract subject from dependency parsing if still missing
-    if entity is None:
+    # Step 2: POSSESSIVE/COMPOUND FALLBACK (handle Nvidia's revenue → Nvidia; Netflix revenue → Netflix)
+    if not entity:
         for token in doc:
-            if token.dep_ == "nsubj":
-                valid = _validate_entity(token.text)
-                if valid:
-                    entity = valid
+            if token.dep_ == "nsubj" or token.pos_ == "NOUN":
+                owners = [child.text for child in token.children if child.dep_ == "poss"]
+                compounds = [child.text for child in token.children if child.dep_ == "compound"]
+                if owners:
+                    entity = _validate_entity(owners[0].replace("'s", ""))
+                elif compounds:
+                    entity = _validate_entity(compounds[0])
+                if not entity:
+                    entity = _validate_entity(token.text)
+                if entity:
                     confidence = 0.9
                     break
-    if value is None:
-        if money_entity:
-            value = money_entity
-        elif percent_entity:
-            value = percent_entity
-    
+
+    # Step 3: State Correction (keep latest value on later/actually/corrected)
+    text_lower = doc.text.lower()
+    if len(all_values) > 1 and any(k in text_lower for k in ["later", "actually", "corrected"]):
+        value = all_values[-1]
+
     return value, time, entity, confidence
 
 

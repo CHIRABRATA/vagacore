@@ -1,0 +1,1 @@
+# Compressor module for VagaCore

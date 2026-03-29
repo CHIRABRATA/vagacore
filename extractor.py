@@ -1,0 +1,1 @@
+# Extractor module for VagaCore

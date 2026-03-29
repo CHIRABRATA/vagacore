@@ -2,12 +2,12 @@ def extract_svo(doc):
     """
     Extract Subject, Verb, Object from parsed text.
     Uses verb lemmas for normalized action forms.
-    Intelligent object extraction: prioritizes meaningful nouns over quantities.
+    Improves object extraction: preserves numbers + values with units.
     """
     subject = None
     verb = None
     obj = None
-    quantity_obj = None  # Track if object is just a quantity (e.g., "million")
+    quantity_phrase = None  # Track complete quantity phrase like "$500 million"
     
     for token in doc:
         # Extract subject (nsubj = nominal subject)
@@ -18,27 +18,37 @@ def extract_svo(doc):
         if token.dep_ == "ROOT" and verb is None:
             verb = token.lemma_
         
-        # Extract object with special handling for quantities
+        # Extract object with smart handling for quantities
         if token.dep_ in ["dobj", "attr"] and obj is None:
-            # Check if this is just a quantity word (million, billion, etc.)
-            if token.text.lower() in ["million", "billion", "thousand", "hundred"]:
-                quantity_obj = token.text
-            else:
+            # Build full quantity phrase with units (e.g., "$500 million")
+            if token.text[0] in "$€£" or token.text.replace(".", "").replace(",", "").isdigit():
+                # Found number/currency, look ahead for unit words
+                quantity_phrase = _build_quantity_phrase(token, doc)
+                obj = quantity_phrase
+            elif token.text.lower() not in ["million", "billion", "thousand", "hundred"]:
                 obj = token.text
     
-    # If we only found a quantity object, look for a more meaningful object
-    if obj is None and quantity_obj is not None:
-        # Try to find a meaningful noun that goes with the quantity
-        for token in doc:
-            if token.dep_ == "pobj" and token.head.text in ["in", "of"]:
-                if token.text.lower() not in ["period", "time", "quarter", "year"]:
-                    obj = token.text
-                    break
-        # Fallback to quantity if no better object found
-        if obj is None:
-            obj = quantity_obj
-    
     return subject, verb, obj
+
+
+def _build_quantity_phrase(token, doc):
+    """Build complete quantity phrase including units (e.g., '$500 million')."""
+    phrase_tokens = [token.text]
+    
+    # Look at following tokens for unit words
+    idx = token.i + 1
+    while idx < len(doc) and idx < token.i + 4:
+        next_token = doc[idx]
+        if next_token.text.lower() in ["million", "billion", "trillion", "thousand", "percent", "%"]:
+            phrase_tokens.append(next_token.text)
+            idx += 1
+        elif next_token.pos_ == "NUM":
+            phrase_tokens.append(next_token.text)
+            idx += 1
+        else:
+            break
+    
+    return " ".join(phrase_tokens)
 
 
 def extract_entities(doc):
@@ -84,36 +94,56 @@ def extract_entities_by_type(doc):
 def extract_details(doc):
     """
     Extract value, time, and entity from parsed text.
-    Intelligent hybrid approach: ML-based NER + rule-based syntax.
+    IMPROVED: Better preservation of numbers, times, and entity separation.
     
     Entity Priority:
-    1. Domain keywords (revenue, profit, earnings) from rule-based
-    2. NER organizations/locations (but not times) as fallback
-    3. Filter out common non-domain and temporal words
+    1. Domain keywords (revenue, profit, earnings) - highest priority
+    2. Organizations/Persons (but not generic, not dates)
+    3. Fallback to extracted organization entities
+    
+    Returns: (value, time, entity)
+        value: Monetary or percentage with full units (e.g., "$500 million", "15%")
+        time: Date expression (e.g., "Q3 2024", "2024-01-15")
+        entity: Company/person name (e.g., "Apple", "Microsoft")
     """
     value = None
     time = None
     entity = None
-    org_entity = None  # Store ORG as fallback
+    org_entity = None
+    money_entity = None
+    percent_entity = None
 
-    # Step 1: Extract using NER
+    # Step 1: Extract using NER - preserve full entity text
     for ent in doc.ents:
-        # Extract monetary or percentage values
-        if ent.label_ in ["PERCENT", "MONEY"]:
-            value = ent.text.strip()
+        # Preserve monetary values with full text
+        if ent.label_ == "MONEY":
+            money_entity = ent.text.strip()
+            if value is None:
+                value = money_entity
 
-        # Extract temporal information
-        elif ent.label_ in ["DATE", "TIME"]:
+        # Preserve percentage with % sign
+        elif ent.label_ == "PERCENT":
+            percent_entity = ent.text.strip()
+            if value is None:
+                value = percent_entity
+
+        # Extract temporal information - KEEP FULL EXPRESSIONS like "Q3 2024"
+        elif ent.label_ == "DATE":
             time = ent.text.strip()
 
-        # Store organizations/locations as fallback (but not if they're dates)
-        elif ent.label_ in ["ORG", "PRODUCT", "LOC"]:
-            # Don't use quarters/dates as entities
-            if ent.text.upper() not in ["Q1", "Q2", "Q3", "Q4"]:
-                org_entity = ent.text.strip()
+        # Store organizations/persons - ONLY trust them if not temporal
+        elif ent.label_ in ["ORG", "PRODUCT", "PERSON", "LOC"]:
+            # Filter out temporal false positives
+            if ent.text.upper() not in ["Q1", "Q2", "Q3", "Q4", "Q1 2024", "Q2 2024", "Q3 2024", "Q4 2024"]:
+                if ent.label_ in ["ORG", "PRODUCT"]:
+                    org_entity = ent.text.strip()
+                elif ent.label_ == "PERSON":
+                    entity = ent.text.strip()
+                    return value, time, entity
 
-    # Step 2: Prioritize domain-specific nouns over generic entities
-    domain_keywords = ["revenue", "profit", "earnings", "sales", "income", "loss", "growth", "increase", "decline"]
+    # Step 2: Domain keywords for entity - prioritize over generic orgs
+    domain_keywords = ["revenue", "profit", "earnings", "sales", "income", "loss", 
+                       "growth", "increase", "decline", "margin", "margin", "eps"]
     filter_words = ["period", "time", "quarter", "year", "date"]
     
     for token in doc:
@@ -134,4 +164,11 @@ def extract_details(doc):
     if entity is None and org_entity is not None:
         entity = org_entity
 
+    # Ensure value preserves full precision
+    if value is None and money_entity is not None:
+        value = money_entity
+    if value is None and percent_entity is not None:
+        value = percent_entity
+
     return value, time, entity
+

@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name="vagacore",
-    version="0.5.0",
+    version="0.6.0",
     author="VagaCore Team",
     description="Intelligent Text Compression & Fact Extraction Engine using NLP",
     long_description=long_description,

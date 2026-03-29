@@ -4,11 +4,10 @@ VagaCore AI Demo - Text Compression & Fact Extraction
 Demonstrates the power of intelligent fact extraction using:
 - Named Entity Recognition (NER)
 - Dependency Parsing
-- Context-Aware Processing
+- Context-Aware Processing with Multiple Output Modes
 """
 
 import json
-
 from vagacore import compress
 
 
@@ -19,10 +18,8 @@ def main():
     text = """
 Apple reported $500 million in revenue during Q3 2024 in the Asia-Pacific region.
 The profit increased by 15% in the same period.
+This was driven by strong iPhone sales.
 """
-    
-    # Run compression
-    result = compress(text)
     
     # Beautiful output
     print("\n" + "=" * 70)
@@ -32,26 +29,31 @@ The profit increased by 15% in the same period.
     print("\n📥 INPUT TEXT:\n")
     print(text)
     
-    print("\n📤 EXTRACTED FACTS:\n")
-    print(json.dumps(result, indent=2))
+    # MODE 1: JSON (API-friendly)
+    print("\n" + "=" * 70)
+    print("📤 MODE 1: JSON Output (API-Friendly)")
+    print("=" * 70)
+    result_json = compress(text, mode="json")
+    print(json.dumps(result_json, indent=2))
+    
+    # MODE 2: Text (Human-readable)
+    print("\n" + "=" * 70)
+    print("📄 MODE 2: Text Output (Human-Readable)")
+    print("=" * 70)
+    result_text = compress(text, mode="text")
+    print(result_text)
+    
+    # MODE 3: LLM (Optimized for AI consumption)
+    print("\n" + "=" * 70)
+    print("🤖 MODE 3: LLM Output (AI-Optimized)")
+    print("=" * 70)
+    result_llm = compress(text, mode="llm")
+    print(result_llm)
     
     print("\n" + "=" * 70)
     print("✅ Extraction Complete!")
     print("=" * 70)
-    
-    # Show what was extracted
-    print("\n📊 SUMMARY:\n")
-    for i, fact in enumerate(result, 1):
-        print(f"  Fact {i}:")
-        print(f"    • Subject: {fact.get('subject', 'N/A')}")
-        print(f"    • Action: {fact.get('action', 'N/A')}")
-        print(f"    • Value: {fact.get('value', 'N/A')}")
-        print(f"    • Entity: {fact.get('entity', 'N/A')}")
-        print(f"    • Time: {fact.get('time', 'N/A')}")
-        print()
-    
-    print("=" * 70)
-    print("🎯 VagaCore v0.5 | Hybrid NER + Rule-Based Extraction")
+    print("\n🎯 VagaCore v0.5 | Hybrid NER + Rule-Based Extraction")
     print("=" * 70 + "\n")
 
 

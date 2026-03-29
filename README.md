@@ -11,18 +11,7 @@ VagaCore is an NLP pipeline that converts messy, multi-sentence text into struct
 - Safe outputs: skips negated/hypothetical facts and deduplicates conflicting facts.
 
 ---
-## Architecture (Data Flow)
-```mermaid
-flowchart TD
-    A[Raw Text] --> B[clean_text]
-    B --> C[spaCy Parser\nNER + POS + Dependencies]
-    C --> D[Noise / Validation Guards\nnegation+hypothetical filters]
-    D --> E[Extractor\nSVO + values + time\nowner/compound subjects]
-    E --> F[Pairing & Lists\nrespectively / parallel / key:value]
-    F --> G[Context Memory\nlast time + last entity]
-    G --> H[Deduplication & Confidence]
-    H --> I[Formatted Output\nJSON | text | llm]
-```
+
 
 ---
 ## Module Map
@@ -108,5 +97,15 @@ python examples/test_stress.py
 - 1.0.0: Negation/hypothetical guards, list fallback, pairing alignment, correction-aware numeric selection.
 
 ---
-## License
-MIT
+## Architecture (Data Flow)
+
+flowchart TD
+    A[Raw Text] --> B[clean_text]
+    B --> C[spaCy Parser\nNER + POS + Dependencies]
+    C --> D[Noise / Validation Guards\nnegation+hypothetical filters]
+    D --> E[Extractor\nSVO + values + time\nowner/compound subjects]
+    E --> F[Pairing & Lists\nrespectively / parallel / key:value]
+    F --> G[Context Memory\nlast time + last entity]
+    G --> H[Deduplication & Confidence]
+    H --> I[Formatted Output\nJSON | text | llm]
+

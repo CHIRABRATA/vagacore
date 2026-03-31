@@ -1,4 +1,4 @@
-# VagaCore 1.0.1 — Production-Ready Fact Extraction
+# VagaCore 1.0.1 — Production-Ready Fact Extractions
 
 VagaCore is an NLP pipeline that converts messy, multi-sentence text into structured, time-aware facts for RAG, analytics, and automation. It combines spaCy NER, dependency parsing, rule-based guards, and context memory to avoid hallucinations and keep entities, values, and time properly aligned.
 

@@ -3,6 +3,7 @@
 VagaCore is an NLP pipeline that converts messy, multi-sentence text into structured, time-aware facts for RAG, analytics, and automation. It combines spaCy NER, dependency parsing, rule-based guards, and context memory to avoid hallucinations and keep entities, values, and time properly aligned.
 
 ---
+--
 ## Why VagaCore
 - Financial-grade extraction: MONEY, PERCENT, DATE with unit preservation (M/B/k) and correction-handling.
 - Entity hygiene: possessive/compound owners ("Nvidia's revenue" → Nvidia), noise filters, and generic-subject resolution.

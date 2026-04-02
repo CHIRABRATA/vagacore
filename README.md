@@ -241,21 +241,15 @@ llm_output = compress(text, mode="llm")
 
 ## 🏗️ Architecture
 
-### Data Flow Pipeline
-
-```mermaid
 flowchart TD
     A[Raw Text Input] --> B[Text Cleaning]
-    B --> C[spaCy NLP Parser<br/>NER + POS + Dependencies]
-    C --> D[Validation Guards<br/>Negation + Hypothetical Filters]
-    D --> E[Entity Extractor<br/>SVO + Values + Time]
-    E --> F[Pairing & Lists<br/>Respectively + Parallel + Key:Value]
-    F --> G[Context Memory<br/>Time + Entity Propagation]
-    G --> H[Deduplication<br/>Confidence Scoring]
-    H --> I[Output Formatter<br/>JSON | Text | LLM]
-```
-
-### Module Structure
+    B --> C[spaCy NLP Parser\nNER + POS + Dependencies]
+    C --> D[Validation Guards\nNegation + Hypothetical Filters]
+    D --> E[Entity Extractor\nSVO + Values + Time]
+    E --> F[Pairing & Lists\nRespectively + Parallel + Key:Value]
+    F --> G[Context Memory\nTime + Entity Propagation]
+    G --> H[Deduplication\nConfidence Scoring]
+    H --> I[Output Formatter\nJSON | Text | LLM]
 
 ```
 vagacore/

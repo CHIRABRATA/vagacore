@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VagaCore — Context-Aware Fact Extraction Engine</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600&family=Syne:wght@400;600;700;800&family=Onest:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #030712;
+      --surface: #0d1117;
+      --surface2: #161b22;
+      --border: rgba(255,255,255,0.07);
+      --accent: #00d4ff;
+      --accent2: #7c3aed;
+      --accent3: #10b981;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --glow: rgba(0,212,255,0.15);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Onest', sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* ─── NOISE TEXTURE ─── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ─── SCROLLBAR ─── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--accent2); border-radius: 99px; }
+
+    /* ─── NAV ─── */
+    nav {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 2rem;
+      height: 60px;
+      background: rgba(3,7,18,0.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: 1.2rem;
+      color: var(--accent);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .nav-logo .version-badge {
+      font-size: 0.65rem;
+      font-family: 'JetBrains Mono', monospace;
+      background: rgba(0,212,255,0.1);
+      border: 1px solid rgba(0,212,255,0.3);
+      color: var(--accent);
+      padding: 2px 8px;
+      border-radius: 99px;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-cta {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    .btn {
+      padding: 0.45rem 1.1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      font-family: 'Onest', sans-serif;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      border: none;
+      color: white;
+      box-shadow: 0 0 20px rgba(0,212,255,0.2);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 0 30px rgba(0,212,255,0.35); }
+
+    .hamburger {
+      display: none;
+      flex-direction: column;
+      gap: 5px;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 4px;
+    }
+    .hamburger span {
+      display: block;
+      width: 22px;
+      height: 2px;
+      background: var(--text);
+      border-radius: 2px;
+      transition: all 0.3s;
+    }
+
+    /* ─── HERO ─── */
+    .hero {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 6rem 2rem 4rem;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-bg {
+      position: absolute;
+      inset: 0;
+      z-index: -1;
+    }
+
+    .orb {
+      position: absolute;
+      border-radius: 50%;
+      filter: blur(80px);
+      animation: orbFloat 8s ease-in-out infinite;
+    }
+    .orb-1 { width: 500px; height: 500px; background: rgba(124,58,237,0.15); top: -100px; left: -100px; animation-delay: 0s; }
+    .orb-2 { width: 400px; height: 400px; background: rgba(0,212,255,0.1); top: 50%; right: -100px; animation-delay: -3s; }
+    .orb-3 { width: 300px; height: 300px; background: rgba(16,185,129,0.08); bottom: 0; left: 30%; animation-delay: -6s; }
+
+    @keyframes orbFloat {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-30px) scale(1.05); }
+    }
+
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+      background-size: 50px 50px;
+    }
+
+    .hero-eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      color: var(--accent);
+      text-transform: uppercase;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      animation: fadeUp 0.8s ease both;
+    }
+
+    .hero-eyebrow::before, .hero-eyebrow::after {
+      content: '';
+      width: 40px;
+      height: 1px;
+      background: var(--accent);
+      opacity: 0.5;
+    }
+
+    .hero-title {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(3rem, 8vw, 6.5rem);
+      font-weight: 800;
+      line-height: 1.0;
+      letter-spacing: -0.03em;
+      margin-bottom: 1.5rem;
+      animation: fadeUp 0.8s ease 0.1s both;
+    }
+
+    .hero-title .gradient-text {
+      background: linear-gradient(135deg, #00d4ff 0%, #7c3aed 50%, #10b981 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      background-size: 200% 200%;
+      animation: gradientShift 4s ease infinite;
+    }
+
+    @keyframes gradientShift {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+
+    .hero-sub {
+      font-size: 1.15rem;
+      color: var(--muted);
+      max-width: 560px;
+      margin: 0 auto 2.5rem;
+      animation: fadeUp 0.8s ease 0.2s both;
+    }
+
+    .hero-actions {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 4rem;
+      animation: fadeUp 0.8s ease 0.3s both;
+    }
+
+    .btn-hero {
+      padding: 0.8rem 2rem;
+      font-size: 0.95rem;
+      border-radius: 10px;
+    }
+
+    .pip-install {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.75rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.75rem 1.25rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      color: var(--accent3);
+      cursor: pointer;
+      transition: all 0.2s;
+      animation: fadeUp 0.8s ease 0.4s both;
+    }
+    .pip-install:hover { border-color: var(--accent3); background: rgba(16,185,129,0.05); }
+    .pip-install .copy-icon { color: var(--muted); font-size: 0.8rem; transition: color 0.2s; }
+    .pip-install:hover .copy-icon { color: var(--accent3); }
+
+    .hero-stats {
+      display: flex;
+      gap: 3rem;
+      justify-content: center;
+      flex-wrap: wrap;
+      animation: fadeUp 0.8s ease 0.5s both;
+    }
+
+    .stat {
+      text-align: center;
+    }
+    .stat-val {
+      font-family: 'Syne', sans-serif;
+      font-size: 2rem;
+      font-weight: 800;
+      color: var(--accent);
+      display: block;
+    }
+    .stat-label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ─── SECTION COMMON ─── */
+    section { padding: 6rem 2rem; position: relative; }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    .section-label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.25em;
+      color: var(--accent2);
+      text-transform: uppercase;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .section-label::before { content: '//'; color: var(--accent); }
+
+    .section-title {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(1.8rem, 4vw, 2.8rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .section-desc {
+      color: var(--muted);
+      font-size: 1rem;
+      max-width: 540px;
+      margin-bottom: 3.5rem;
+    }
+
+    /* ─── FEATURES ─── */
+    #features { background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .feature-card {
+      background: var(--surface);
+      padding: 2rem;
+      transition: background 0.3s;
+      position: relative;
+      overflow: hidden;
+    }
+    .feature-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--card-accent), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .feature-card:hover::before { opacity: 1; }
+    .feature-card:hover { background: var(--surface2); }
+
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      margin-bottom: 1.25rem;
+      background: var(--icon-bg, rgba(0,212,255,0.1));
+    }
+
+    .feature-name {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-desc { font-size: 0.875rem; color: var(--muted); line-height: 1.6; }
+
+    /* ─── HOW IT WORKS ─── */
+    #how {
+      background: var(--bg);
+    }
+
+    .pipeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .pipeline-step {
+      display: grid;
+      grid-template-columns: 60px 1fr;
+      gap: 1.5rem;
+      position: relative;
+    }
+
+    .pipeline-step:not(:last-child)::after {
+      content: '';
+      position: absolute;
+      left: 29px;
+      top: 52px;
+      bottom: -1rem;
+      width: 2px;
+      background: linear-gradient(to bottom, var(--accent2), transparent);
+    }
+
+    .step-number {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 2px solid var(--accent2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent2);
+      background: var(--bg);
+      flex-shrink: 0;
+      margin-top: 0.25rem;
+    }
+
+    .step-content {
+      padding-bottom: 2.5rem;
+    }
+
+    .step-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.05rem;
+      margin-bottom: 0.4rem;
+    }
+    .step-desc { font-size: 0.875rem; color: var(--muted); }
+
+    /* ─── DEMO / EXAMPLE ─── */
+    #example {
+      background: linear-gradient(135deg, rgba(124,58,237,0.03), rgba(0,212,255,0.03));
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .demo-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+
+    .code-panel {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.85rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .code-dots { display: flex; gap: 6px; }
+    .code-dots span {
+      width: 10px; height: 10px; border-radius: 50%;
+    }
+    .code-dots span:nth-child(1) { background: #ff5f57; }
+    .code-dots span:nth-child(2) { background: #febc2e; }
+    .code-dots span:nth-child(3) { background: #28c840; }
+
+    .code-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.7rem;
+      padding: 3px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--text); }
+
+    .code-body {
+      padding: 1.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.82rem;
+      line-height: 1.8;
+      overflow-x: auto;
+    }
+
+    .c-kw { color: #c792ea; }
+    .c-fn { color: #82aaff; }
+    .c-str { color: #c3e88d; }
+    .c-key { color: #ff9cac; }
+    .c-val { color: #f78c6c; }
+    .c-num { color: #f78c6c; }
+    .c-com { color: #546e7a; font-style: italic; }
+    .c-punc { color: #89ddff; }
+    .c-hl { color: var(--accent3); }
+
+    /* ─── OUTPUT MODES ─── */
+    .modes-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .mode-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+    .mode-card:hover { border-color: var(--accent); background: rgba(0,212,255,0.03); transform: translateY(-2px); }
+
+    .mode-tag {
+      display: inline-block;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+      padding: 3px 10px;
+      border-radius: 6px;
+      margin-bottom: 0.75rem;
+      border: 1px solid;
+    }
+    .mode-tag.json { background: rgba(0,212,255,0.1); border-color: rgba(0,212,255,0.3); color: var(--accent); }
+    .mode-tag.text { background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.3); color: var(--accent3); }
+    .mode-tag.llm { background: rgba(124,58,237,0.1); border-color: rgba(124,58,237,0.3); color: #a78bfa; }
+
+    .mode-title { font-family: 'Syne', sans-serif; font-weight: 700; margin-bottom: 0.4rem; }
+    .mode-desc { font-size: 0.85rem; color: var(--muted); }
+
+    /* ─── INSTALL ─── */
+    #install { background: var(--bg); }
+
+    .install-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .install-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .install-step-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface2);
+    }
+
+    .step-num-badge {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent2), var(--accent));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    .install-step-title { font-weight: 600; font-size: 0.9rem; }
+
+    .install-code {
+      padding: 1.25rem 1.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.83rem;
+      line-height: 1.9;
+      color: var(--accent3);
+    }
+
+    /* ─── MODULE STRUCTURE ─── */
+    .module-tree {
+      background: #010409;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      line-height: 2;
+    }
+
+    .tree-dir { color: #a78bfa; }
+    .tree-file { color: var(--text); }
+    .tree-comment { color: var(--muted); font-size: 0.78rem; }
+    .tree-line { color: #334155; }
+
+    /* ─── PERFORMANCE ─── */
+    #performance { background: var(--surface); border-top: 1px solid var(--border); }
+
+    .perf-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; }
+
+    .perf-box {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+    }
+
+    .perf-box-title {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      margin-bottom: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .perf-item {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.875rem;
+    }
+    .perf-item:last-child { border-bottom: none; }
+
+    .perf-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .dot-green { background: var(--accent3); box-shadow: 0 0 8px var(--accent3); }
+    .dot-yellow { background: #fbbf24; box-shadow: 0 0 8px #fbbf24; }
+
+    /* ─── CHANGELOG ─── */
+    #changelog { background: var(--bg); }
+
+    .changelog-list { display: flex; flex-direction: column; gap: 1.5rem; }
+
+    .changelog-item {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .changelog-item:last-child { border-bottom: none; }
+
+    .changelog-ver {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--accent);
+      padding-top: 0.1rem;
+    }
+
+    .changelog-changes { display: flex; flex-direction: column; gap: 0.4rem; }
+
+    .change-item {
+      font-size: 0.875rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .change-item::before { content: '+'; color: var(--accent3); font-family: 'JetBrains Mono', monospace; font-weight: 700; }
+
+    /* ─── CTA / FOOTER ─── */
+    .cta-section {
+      padding: 6rem 2rem;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      background: var(--surface);
+      border-top: 1px solid var(--border);
+    }
+
+    .cta-bg-orb {
+      position: absolute;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(124,58,237,0.12), transparent 70%);
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    }
+
+    .cta-title {
+      font-family: 'Syne', sans-serif;
+      font-size: clamp(2rem, 5vw, 3.5rem);
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 1rem;
+    }
+
+    .cta-sub { color: var(--muted); margin-bottom: 2.5rem; font-size: 1rem; }
+
+    footer {
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: gap;
+      gap: 1rem;
+    }
+
+    .footer-logo {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      color: var(--accent);
+      font-size: 1.1rem;
+    }
+
+    .footer-links { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+    .footer-links a { color: var(--muted); text-decoration: none; font-size: 0.85rem; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--text); }
+
+    .footer-copy { font-size: 0.8rem; color: var(--muted); }
+
+    /* ─── TOAST ─── */
+    .toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--surface2);
+      border: 1px solid var(--accent3);
+      color: var(--accent3);
+      padding: 0.75rem 1.25rem;
+      border-radius: 10px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      transform: translateY(100px);
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 999;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    /* ─── MOBILE NAV ─── */
+    .mobile-menu {
+      display: none;
+      position: fixed;
+      top: 60px;
+      left: 0; right: 0;
+      background: rgba(3,7,18,0.98);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+      flex-direction: column;
+      gap: 1.25rem;
+      z-index: 99;
+    }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu a { color: var(--text); text-decoration: none; font-weight: 500; }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 768px) {
+      .nav-links, .nav-cta { display: none; }
+      .hamburger { display: flex; }
+
+      .demo-grid { grid-template-columns: 1fr; }
+      .modes-grid { grid-template-columns: 1fr; }
+      .perf-grid { grid-template-columns: 1fr; }
+      .changelog-item { grid-template-columns: 1fr; gap: 0.5rem; }
+
+      .hero-stats { gap: 2rem; }
+      .hero-actions { flex-direction: column; align-items: center; }
+
+      footer { flex-direction: column; text-align: center; }
+    }
+
+    /* ─── SCROLL REVEAL ─── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition: opacity 0.6s ease, transform 0.6s ease;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+
+    /* ─── PYPI BADGE ─── */
+    .badges {
+      display: flex;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+      margin-bottom: 3rem;
+      justify-content: center;
+      animation: fadeUp 0.8s ease 0.35s both;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.3rem 0.75rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.7rem;
+    }
+    .badge .badge-label { color: var(--muted); }
+    .badge .badge-val { color: var(--accent); }
+
+    /* Active nav link */
+    .nav-links a.active { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav id="main-nav">
+  <a href="#" class="nav-logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+    VagaCore
+    <span class="version-badge">v1.0.1</span>
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#example">Example</a></li>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#performance">Performance</a></li>
+    <li><a href="#changelog">Changelog</a></li>
+  </ul>
+  <div class="nav-cta">
+    <a href="https://github.com/CHIRABRATA/vagacore" target="_blank" class="btn btn-outline">GitHub ↗</a>
+    <a href="https://pypi.org/project/vagacore/" target="_blank" class="btn btn-primary">PyPI ↗</a>
+  </div>
+  <button class="hamburger" onclick="toggleMenu()" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<!-- MOBILE MENU -->
+<div class="mobile-menu" id="mobile-menu">
+  <a href="#features" onclick="toggleMenu()">Features</a>
+  <a href="#example" onclick="toggleMenu()">Example</a>
+  <a href="#install" onclick="toggleMenu()">Install</a>
+  <a href="#performance" onclick="toggleMenu()">Performance</a>
+  <a href="#changelog" onclick="toggleMenu()">Changelog</a>
+  <a href="https://pypi.org/project/vagacore/" target="_blank">PyPI ↗</a>
+</div>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-bg">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+    <div class="grid-overlay"></div>
+  </div>
+
+  <div class="hero-eyebrow">NLP · Fact Extraction · RAG</div>
+
+  <h1 class="hero-title">
+    <span class="gradient-text">VagaCore</span><br>
+    <span style="font-size:0.7em;color:var(--text)">Fact Extraction Engine</span>
+  </h1>
+
+  <p class="hero-sub">
+    A production-ready NLP pipeline that converts messy, multi-sentence text into structured, time-aware facts for RAG, analytics, and automation.
+  </p>
+
+  <div class="badges">
+    <div class="badge"><span class="badge-label">version</span><span class="badge-val">1.0.1</span></div>
+    <div class="badge"><span class="badge-label">python</span><span class="badge-val">≥ 3.8</span></div>
+    <div class="badge"><span class="badge-label">license</span><span class="badge-val">open source</span></div>
+    <div class="badge"><span class="badge-label">released</span><span class="badge-val">Mar 30, 2026</span></div>
+  </div>
+
+  <div class="hero-actions">
+    <a href="#install" class="btn btn-primary btn-hero">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2v14M5 15l7 7 7-7M3 19h18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      Get Started
+    </a>
+    <a href="#example" class="btn btn-outline btn-hero">View Example →</a>
+  </div>
+
+  <div class="pip-install" onclick="copyPip()">
+    <span style="color:var(--muted)">$</span>
+    <span>pip install vagacore</span>
+    <span class="copy-icon" id="copy-icon">⎘ copy</span>
+  </div>
+
+  <div style="height:3rem"></div>
+
+  <div class="hero-stats">
+    <div class="stat">
+      <span class="stat-val">NER</span>
+      <span class="stat-label">Entity Recognition</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">3</span>
+      <span class="stat-label">Output Modes</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">0.9+</span>
+      <span class="stat-label">Confidence Score</span>
+    </div>
+    <div class="stat">
+      <span class="stat-val">100%</span>
+      <span class="stat-label">Offline</span>
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section id="features">
+  <div class="container">
+    <div class="section-label reveal">features</div>
+    <h2 class="section-title reveal">Built for Production</h2>
+    <p class="section-desc reveal">Every feature designed for financial-grade accuracy and enterprise reliability.</p>
+
+    <div class="features-grid reveal">
+      <div class="feature-card" style="--card-accent: #00d4ff;">
+        <div class="feature-icon" style="--icon-bg: rgba(0,212,255,0.1); color: #00d4ff;">💰</div>
+        <div class="feature-name">Financial-Grade Extraction</div>
+        <div class="feature-desc">Detects MONEY, PERCENT, DATE with unit preservation — handles M/B/k suffixes without loss of precision.</div>
+      </div>
+      <div class="feature-card" style="--card-accent: #7c3aed;">
+        <div class="feature-icon" style="--icon-bg: rgba(124,58,237,0.1); color: #a78bfa;">🧹</div>
+        <div class="feature-name">Entity Hygiene</div>
+        <div class="feature-desc">Handles possessives and compounds intelligently — "Nvidia's revenue" resolves cleanly to "Nvidia".</div>
+      </div>
+      <div class="feature-card" style="--card-accent: #10b981;">
+        <div class="feature-icon" style="--icon-bg: rgba(16,185,129,0.1); color: #10b981;">🧠</div>
+        <div class="feature-name">Context Memory</div>
+        <div class="feature-desc">Propagates time and subject context across sentences — "the same period" resolves correctly.</div>
+      </div>
+      <div class="feature-card" style="--card-accent: #f59e0b;">
+        <div class="feature-icon" style="--icon-bg: rgba(245,158,11,0.1); color: #fbbf24;">🚫</div>
+        <div class="feature-name">Safe Outputs</div>
+        <div class="feature-desc">Automatically skips negated and hypothetical statements — no hallucinated facts in your pipeline.</div>
+      </div>
+      <div class="feature-card" style="--card-accent: #ec4899;">
+        <div class="feature-icon" style="--icon-bg: rgba(236,72,153,0.1); color: #ec4899;">🔗</div>
+        <div class="feature-name">Smart Pairing</div>
+        <div class="feature-desc">Handles "respectively" constructs, parallel values, and key:value formats with semantic precision.</div>
+      </div>
+      <div class="feature-card" style="--card-accent: #00d4ff;">
+        <div class="feature-icon" style="--icon-bg: rgba(0,212,255,0.08); color: #00d4ff;">📊</div>
+        <div class="feature-name">Confidence Scoring</div>
+        <div class="feature-desc">Every extracted fact ships with a calibrated confidence score from 0.0–1.0 for downstream filtering.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section id="how" style="background: var(--bg);">
+  <div class="container">
+    <div class="section-label reveal">architecture</div>
+    <h2 class="section-title reveal">How the Pipeline Works</h2>
+    <p class="section-desc reveal">Five sequential modules transform raw text into clean, structured facts.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:3rem;align-items:start">
+      <div class="pipeline reveal">
+        <div class="pipeline-step">
+          <div class="step-number">01</div>
+          <div class="step-content">
+            <div class="step-title">parser.py — spaCy Loading</div>
+            <div class="step-desc">Loads en_core_web_sm, tokenizes input, builds the dependency parse tree and POS tags.</div>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="step-number">02</div>
+          <div class="step-content">
+            <div class="step-title">utils.py — Noise Removal</div>
+            <div class="step-desc">Strips hypothetical phrases, negation guards, and deduplicates redundant surface forms.</div>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="step-number">03</div>
+          <div class="step-content">
+            <div class="step-title">extractor.py — SVO Extraction</div>
+            <div class="step-desc">Runs Subject-Verb-Object triples, entity recognition, and temporal value binding.</div>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="step-number">04</div>
+          <div class="step-content">
+            <div class="step-title">compressor.py — Orchestration</div>
+            <div class="step-desc">Chains modules, maintains cross-sentence memory state, resolves coreferences.</div>
+          </div>
+        </div>
+        <div class="pipeline-step">
+          <div class="step-number">05</div>
+          <div class="step-content">
+            <div class="step-title">__init__.py — Output</div>
+            <div class="step-desc">Formats results as json / text / llm mode and attaches version metadata.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="module-tree reveal">
+        <div><span class="tree-dir">vagacore/</span></div>
+        <div><span class="tree-line">│</span></div>
+        <div><span class="tree-line">├── </span><span class="tree-file">parser.py</span>   <span class="tree-comment"># spaCy loading &amp; parsing</span></div>
+        <div><span class="tree-line">├── </span><span class="tree-file">utils.py</span>    <span class="tree-comment"># cleaning &amp; noise removal</span></div>
+        <div><span class="tree-line">├── </span><span class="tree-file">extractor.py</span><span class="tree-comment"> # SVO + entity extraction</span></div>
+        <div><span class="tree-line">├── </span><span class="tree-file">compressor.py</span><span class="tree-comment"># pipeline + memory</span></div>
+        <div><span class="tree-line">└── </span><span class="tree-file">__init__.py</span> <span class="tree-comment"># exports &amp; version</span></div>
+        <br>
+        <div><span class="tree-dir">examples/</span></div>
+        <div><span class="tree-line">├── </span><span class="tree-file">test_script.py</span></div>
+        <div><span class="tree-line">└── </span><span class="tree-file">test_stress.py</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- EXAMPLE -->
+<section id="example">
+  <div class="container">
+    <div class="section-label reveal">live example</div>
+    <h2 class="section-title reveal">See It In Action</h2>
+    <p class="section-desc reveal">Multi-sentence input → structured, time-aware facts with confidence scores.</p>
+
+    <div class="demo-grid reveal">
+      <div class="code-panel">
+        <div class="code-header">
+          <div class="code-dots"><span></span><span></span><span></span></div>
+          <div class="code-title">input.py</div>
+          <button class="copy-btn" onclick="copyCode('input-code')">copy</button>
+        </div>
+        <div class="code-body" id="input-code"><span class="c-kw">from</span> <span class="c-fn">vagacore</span> <span class="c-kw">import</span> <span class="c-fn">compress</span>
+<br>
+text <span class="c-punc">=</span> <span class="c-str">"""</span>
+<span class="c-str">Apple reported $81.8 billion in revenue</span>
+<span class="c-str">for Q3 2024.</span>
+<span class="c-str">If Apple sells 1M units, it will reach $900M.</span>
+<span class="c-str">Netflix and Disney reported $1B and $2B</span>
+<span class="c-str">respectively.</span>
+<span class="c-str">"""</span>
+<br>
+result <span class="c-punc">=</span> <span class="c-fn">compress</span>(text<span class="c-punc">,</span> mode<span class="c-punc">=</span><span class="c-str">"json"</span>)
+<span class="c-kw">print</span>(result)
+        </div>
+      </div>
+
+      <div class="code-panel">
+        <div class="code-header">
+          <div class="code-dots"><span></span><span></span><span></span></div>
+          <div class="code-title">output.json</div>
+          <button class="copy-btn" onclick="copyCode('output-code')">copy</button>
+        </div>
+        <div class="code-body" id="output-code"><span class="c-punc">{</span>
+  <span class="c-key">"facts"</span><span class="c-punc">: [</span>
+    <span class="c-punc">{</span>
+      <span class="c-key">"entity"</span><span class="c-punc">:</span> <span class="c-str">"Apple"</span><span class="c-punc">,</span>
+      <span class="c-key">"event"</span><span class="c-punc">:</span>  <span class="c-str">"reported"</span><span class="c-punc">,</span>
+      <span class="c-key">"value"</span><span class="c-punc">:</span>  <span class="c-str">"$81.8 billion"</span><span class="c-punc">,</span>
+      <span class="c-key">"time"</span><span class="c-punc">:</span>   <span class="c-str">"Q3 2024"</span><span class="c-punc">,</span>
+      <span class="c-key">"confidence"</span><span class="c-punc">:</span> <span class="c-num">0.92</span>
+    <span class="c-punc">},</span>
+    <span class="c-punc">{</span>
+      <span class="c-key">"entity"</span><span class="c-punc">:</span> <span class="c-str">"Netflix"</span><span class="c-punc">,</span>
+      <span class="c-key">"event"</span><span class="c-punc">:</span>  <span class="c-str">"reported"</span><span class="c-punc">,</span>
+      <span class="c-key">"value"</span><span class="c-punc">:</span>  <span class="c-str">"$1B"</span><span class="c-punc">,</span>
+      <span class="c-key">"time"</span><span class="c-punc">:</span>   <span class="c-str">"Q3 2024"</span><span class="c-punc">,</span>
+      <span class="c-key">"confidence"</span><span class="c-punc">:</span> <span class="c-num">0.88</span>
+    <span class="c-punc">},</span>
+    <span class="c-com">// hypothetical "If Apple..." → skipped</span>
+  <span class="c-punc">],</span>
+  <span class="c-key">"version"</span><span class="c-punc">:</span> <span class="c-str">"1.0.1"</span>
+<span class="c-punc">}</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:3rem"></div>
+
+    <div class="section-label reveal">output modes</div>
+    <h3 class="reveal" style="font-family:'Syne',sans-serif;font-weight:700;font-size:1.4rem;margin-bottom:1.5rem;">Three Ways to Consume</h3>
+    <div class="modes-grid reveal">
+      <div class="mode-card">
+        <div class="mode-tag json">mode="json"</div>
+        <div class="mode-title">Structured Facts</div>
+        <div class="mode-desc">Full JSON with entity, event, value, time, and confidence. Ideal for RAG and databases.</div>
+      </div>
+      <div class="mode-card">
+        <div class="mode-tag text">mode="text"</div>
+        <div class="mode-title">Readable Summary</div>
+        <div class="mode-desc">Human-readable bullet summary. Great for reports, dashboards, and quick reviews.</div>
+      </div>
+      <div class="mode-card">
+        <div class="mode-tag llm">mode="llm"</div>
+        <div class="mode-title">LLM-Compact</div>
+        <div class="mode-desc">Compressed token-efficient format for feeding into LLM prompts. Reduces context size.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- INSTALL -->
+<section id="install">
+  <div class="container">
+    <div class="section-label reveal">installation</div>
+    <h2 class="section-title reveal">Get Running in 60 Seconds</h2>
+    <p class="section-desc reveal">Python ≥ 3.8 required. Works fully offline after setup — no API keys needed.</p>
+
+    <div class="install-steps reveal">
+      <div class="install-step">
+        <div class="install-step-header">
+          <div class="step-num-badge">1</div>
+          <div class="install-step-title">Create & activate virtual environment</div>
+        </div>
+        <div class="install-code">
+          python -m venv venv<br>
+          ./venv/Scripts/activate &nbsp;&nbsp;<span style="color:var(--muted)"># Windows</span><br>
+          source venv/bin/activate &nbsp;<span style="color:var(--muted)"># macOS / Linux</span>
+        </div>
+      </div>
+
+      <div class="install-step">
+        <div class="install-step-header">
+          <div class="step-num-badge">2</div>
+          <div class="install-step-title">Install spaCy and download language model</div>
+        </div>
+        <div class="install-code">
+          pip install -U pip spacy<br>
+          python -m spacy download en_core_web_sm
+        </div>
+      </div>
+
+      <div class="install-step">
+        <div class="install-step-header">
+          <div class="step-num-badge">3</div>
+          <div class="install-step-title">Install VagaCore from PyPI</div>
+        </div>
+        <div class="install-code">
+          pip install vagacore
+        </div>
+      </div>
+
+      <div class="install-step">
+        <div class="install-step-header">
+          <div class="step-num-badge">4</div>
+          <div class="install-step-title">Verify installation</div>
+        </div>
+        <div class="install-code">
+          python -m pytest<br>
+          python examples/test_script.py
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PERFORMANCE -->
+<section id="performance">
+  <div class="container">
+    <div class="section-label reveal">performance</div>
+    <h2 class="section-title reveal">Where It Shines &amp; Where It Doesn't</h2>
+    <p class="section-desc reveal">Honest assessment of current capabilities and known limitations.</p>
+
+    <div class="perf-grid reveal">
+      <div class="perf-box">
+        <div class="perf-box-title" style="color: var(--accent3);">✅ Works Well For</div>
+        <div class="perf-item"><div class="perf-dot dot-green"></div>Multi-sentence financial documents</div>
+        <div class="perf-item"><div class="perf-dot dot-green"></div>Earnings reports and KPI extraction</div>
+        <div class="perf-item"><div class="perf-dot dot-green"></div>Temporal references ("same period", "Q3")</div>
+        <div class="perf-item"><div class="perf-dot dot-green"></div>Entity-rich content with named orgs</div>
+        <div class="perf-item"><div class="perf-dot dot-green"></div>Parallel value structures ("respectively")</div>
+        <div class="perf-item"><div class="perf-dot dot-green"></div>Negation and hypothetical filtering</div>
+      </div>
+      <div class="perf-box">
+        <div class="perf-box-title" style="color: #fbbf24;">⚠️ Known Limitations</div>
+        <div class="perf-item"><div class="perf-dot dot-yellow"></div>Complex multi-action sentences</div>
+        <div class="perf-item"><div class="perf-dot dot-yellow"></div>Passive voice (partial support only)</div>
+        <div class="perf-item"><div class="perf-dot dot-yellow"></div>English-only (multi-language planned)</div>
+        <div class="perf-item"><div class="perf-dot dot-yellow"></div>Very long documents may need chunking</div>
+        <div class="perf-item"><div class="perf-dot dot-yellow"></div>Sarcasm / implicit negation</div>
+        <div class="perf-item"><div class="perf-dot dot-yellow"></div>Custom entity types (planned)</div>
+      </div>
+    </div>
+
+    <div style="height:2.5rem"></div>
+
+    <div class="section-label reveal">use cases</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem" class="reveal">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1.5rem">
+        <div style="font-size:1.5rem;margin-bottom:0.75rem">📄</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;margin-bottom:0.4rem">RAG Systems</div>
+        <div style="font-size:0.85rem;color:var(--muted)">Feed clean structured facts instead of raw chunks into your retrieval pipeline.</div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1.5rem">
+        <div style="font-size:1.5rem;margin-bottom:0.75rem">📈</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;margin-bottom:0.4rem">Financial Analysis</div>
+        <div style="font-size:0.85rem;color:var(--muted)">Parse earnings reports, market analysis, and KPI summaries at scale.</div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1.5rem">
+        <div style="font-size:1.5rem;margin-bottom:0.75rem">🗂️</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;margin-bottom:0.4rem">Knowledge Bases</div>
+        <div style="font-size:0.85rem;color:var(--muted)">Index structured facts instead of raw text for better semantic retrieval.</div>
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:1.5rem">
+        <div style="font-size:1.5rem;margin-bottom:0.75rem">📰</div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;margin-bottom:0.4rem">News Analysis</div>
+        <div style="font-size:0.85rem;color:var(--muted)">Extract entities and metrics from news feeds and build event timelines.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHANGELOG -->
+<section id="changelog" style="background:var(--bg);">
+  <div class="container">
+    <div class="section-label reveal">changelog</div>
+    <h2 class="section-title reveal">Release History</h2>
+
+    <div class="changelog-list reveal">
+      <div class="changelog-item">
+        <div class="changelog-ver">v1.0.1 <span style="display:block;font-size:0.65rem;color:var(--muted);margin-top:2px">Mar 30, 2026</span></div>
+        <div class="changelog-changes">
+          <div class="change-item">Improved money regex — handles edge cases with multi-unit values</div>
+          <div class="change-item">Better subject resolution across complex clause chains</div>
+          <div class="change-item">Context memory enhancements for longer documents</div>
+        </div>
+      </div>
+      <div class="changelog-item">
+        <div class="changelog-ver">v1.0.0 <span style="display:block;font-size:0.65rem;color:var(--muted);margin-top:2px">Initial release</span></div>
+        <div class="changelog-changes">
+          <div class="change-item">Negation and hypothetical filtering</div>
+          <div class="change-item">List and "respectively" construct handling</div>
+          <div class="change-item">Fact deduplication pipeline</div>
+          <div class="change-item">JSON / text / llm output modes</div>
+          <div class="change-item">Confidence scoring for all extracted facts</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="height:2rem"></div>
+    <div style="background:var(--surface);border:1px solid rgba(124,58,237,0.3);border-radius:12px;padding:1.5rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap" class="reveal">
+      <div style="font-size:1.2rem">🔮</div>
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;margin-bottom:0.25rem">Planned in v1.1.0</div>
+        <div style="font-size:0.85rem;color:var(--muted)">Multi-action sentence support · Passive voice improvements · Multi-language support · Custom entity types · Better confidence scoring</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<div class="cta-section">
+  <div class="cta-bg-orb"></div>
+  <h2 class="cta-title reveal">Ready to Extract Facts?</h2>
+  <p class="cta-sub reveal">One pip install. Fully offline. Financial-grade accuracy.</p>
+  <div style="display:flex;gap:1rem;justify-content:center;flex-wrap:wrap" class="reveal">
+    <a href="https://pypi.org/project/vagacore/" target="_blank" class="btn btn-primary btn-hero">Install from PyPI ↗</a>
+    <a href="https://github.com" target="_blank" class="btn btn-outline btn-hero">View on GitHub ↗</a>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">⚡ VagaCore</div>
+  <div class="footer-links">
+    <a href="#features">Features</a>
+    <a href="#example">Example</a>
+    <a href="#install">Install</a>
+    <a href="#changelog">Changelog</a>
+    <a href="https://pypi.org/project/vagacore/" target="_blank">PyPI</a>
+    <a href="https://github.com" target="_blank">GitHub</a>
+  </div>
+  <div class="footer-copy">Built by Chirabrata · v1.0.1</div>
+</footer>
+
+<!-- TOAST -->
+<div class="toast" id="toast">✓ Copied to clipboard</div>
+
+<script>
+  // MOBILE MENU
+  function toggleMenu() {
+    document.getElementById('mobile-menu').classList.toggle('open');
+  }
+
+  // COPY PIP
+  function copyPip() {
+    navigator.clipboard.writeText('pip install vagacore');
+    const icon = document.getElementById('copy-icon');
+    icon.textContent = '✓ copied!';
+    showToast();
+    setTimeout(() => icon.textContent = '⎘ copy', 2000);
+  }
+
+  // COPY CODE
+  function copyCode(id) {
+    const el = document.getElementById(id);
+    const text = el.innerText;
+    navigator.clipboard.writeText(text);
+    showToast();
+  }
+
+  // TOAST
+  function showToast() {
+    const t = document.getElementById('toast');
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+  }
+
+  // SCROLL REVEAL
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) {
+        setTimeout(() => e.target.classList.add('visible'), i * 80);
+      }
+    });
+  }, { threshold: 0.1 });
+
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  // ACTIVE NAV
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.nav-links a');
+
+  window.addEventListener('scroll', () => {
+    const pos = window.scrollY + 80;
+    sections.forEach(s => {
+      if (pos >= s.offsetTop && pos < s.offsetTop + s.offsetHeight) {
+        navLinks.forEach(l => {
+          l.classList.toggle('active', l.getAttribute('href') === '#' + s.id);
+        });
+      }
+    });
+  });
+</script>
+</body>
+</html>
